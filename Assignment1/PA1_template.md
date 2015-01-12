@@ -1,0 +1,239 @@
+Reproducible Research Assignment 1
+======================================
+
+
+## I Loading and prepocessing the data
+
+### 1. Load the data.
+Read "activity.csv" file into an object named *mydata* for continuous uses.
+
+
+```r
+mydata <- read.csv("activity.csv")
+```
+
+### 2. Process/transform the data.
+Now, I don't have much information about the data. So here, I will not do any simplification/tranformation on the data. While, as I do more experiments on the data, I will notice what is acutally redundant in processing the data.
+
+
+## II What is mean total number of steps taken per day?
+### 1. Make a histogram of steps.
+With data read from csv file, here I analyze the total number of steps taken each day. Because I only need steps and dates in this part, I first apply simplification on original data.
+
+
+```r
+step_date <- subset(mydata, select = c(steps, date))
+step_date <- step_date[complete.cases(step_date), ]
+```
+
+Then, I can make a figure demonstrating steps in every day.
+
+
+```r
+sum_date <- aggregate(step_date$steps, by = list(step_date$date), FUN = sum)
+hist(sum_date[, 2], main = "Histogram of steps", 
+     xlab = "Total number of steps each day", ylab = "Frequency")
+```
+
+![plot of chunk unnamed-chunk-3](figure/unnamed-chunk-3-1.png) 
+
+It seems that it conforms to a normal distribution.
+
+### 2. Calculate **mean** and **median**.
+Here, I calculate **mean** and **median** total number of steps taken per day.
+
+
+```r
+print(mean(sum_date[, 2]))
+```
+
+```
+## [1] 10766.19
+```
+
+```r
+print(median(sum_date[, 2]))
+```
+
+```
+## [1] 10765
+```
+
+
+## III What is the average daily activity patterns?
+### 1. Time series plot of average number of steps.
+First, because I need to make a time series figure, it is necessary to get average steps taken, averaged across all days.
+
+
+```r
+mydata$inter <- as.factor(mydata$interval)
+mean_data <- aggregate(mydata$steps, by = list(mydata$inter), FUN = mean, na.rm = TRUE)
+```
+
+Then, plot corresponding figure.
+
+
+```r
+mean_data[, 1] <- as.numeric(as.character(mean_data[, 1]))
+plot(mean_data[, 1], mean_data[, 2], type = "l", 
+     main = "Time series of average steps",
+     xlab = "Interval", ylab = "Average steps")
+```
+
+![plot of chunk unnamed-chunk-6](figure/unnamed-chunk-6-1.png) 
+
+### 2. Find the 5-minute interval which has maximum number of steps.
+Just need to find index of *mydata* which has maximum number of steps.
+
+
+```r
+mydata[which.max(mydata$steps), ]
+```
+
+```
+##       steps       date interval inter
+## 16492   806 2012-11-27      615   615
+```
+
+So the interval is 615 and the maximum number of steps is 806.
+And if I want to find the interval which has maximum number os steps across all days, I can type similar command.
+
+
+```r
+sum_data <- aggregate(mydata$steps, by = list(mydata$inter), FUN = sum, na.rm = TRUE)
+sum_data[which.max(sum_data$x), ]
+```
+
+```
+##     Group.1     x
+## 104     835 10927
+```
+
+Now the interval is 835 and the maximum number of steps across all days is 10927.
+
+
+## Inputing missing values
+### 1. Report total number of missing values.
+First, iterate the columns of *mydata*, I can get total number of missing values for every column.
+
+
+```r
+apply(mydata, 2, function(x) length(which(is.na(x))))
+```
+
+```
+##    steps     date interval    inter 
+##     2304        0        0        0
+```
+
+From the result, I can observe that total number of missing values is 2304, and missing values are all in *steps* column.
+
+### 2. Devise a strategy to fill in all the missing values.
+Here, I use mean of that 5-minute interval to fill in all the missing values.
+
+### 3. Create a new dataset.
+Here, with the strategy above, I create a new dataset named *update_data* whose missing values have been filled in. *mean_data* records average steps for every 5-minute interval. *update_data* looks up average steps in *mean_data* to fill up missing values.
+
+
+```r
+mean_data <- aggregate(mydata$steps, by = list(mydata$inter), FUN = mean, na.rm = TRUE)
+update_data <- mydata
+for (row in 1 : nrow(update_data)) {
+    if (is.na(update_data[row, "steps"])) {
+        update_data[row, "steps"] = mean_data[mean_data$Group.1 == update_data[row, "inter"], 2]
+    }
+}
+```
+
+
+### 4. Analyze the new dataset.
+Here, I analyze the new dataset with the methods applied on original data.
+First, I make a histogram of the total nubmer of steps taken each day.
+
+
+```r
+step_date <- subset(update_data, select = c(steps, date))
+sum_date <- aggregate(step_date$steps, by = list(step_date$date), FUN = sum)
+hist(sum_date[, 2], main = "Histogram of steps", 
+     xlab = "Total number of steps each day", ylab = "Frequency")
+```
+
+![plot of chunk unnamed-chunk-11](figure/unnamed-chunk-11-1.png) 
+
+Then, I can still calculate **mean** and **median** of steps taken each day.
+
+
+```r
+sum_date <- aggregate(update_data$steps, by = list(update_data$date), FUN = sum)
+print(mean(sum_date[,2]))
+```
+
+```
+## [1] 10766.19
+```
+
+```r
+print(median(sum_date[,2]))
+```
+
+```
+## [1] 10766.19
+```
+
+The distribution of total number of steps now is more central to the mean. The **mean** of steps is the same, because I just use average steps in the corresponding interval across all days to fill up the missing values. And the **median** now increases a little bit.
+
+
+## IV Are there differences in activity pattern between weekdays and weekends?
+### 1. Create a new factor.
+Because I need to determine whether the data is weekday or weekend, first I transform data to POSIX time format. Then assign value to new column *day* according the date in a week.
+
+
+```r
+mydata$time = strptime(mydata[,"date"], "%Y-%m-%d")
+mydata$day <- ifelse(is.element(weekdays(mydata$time), c("Saturday", "Sunday")), "weekend", "weekday")
+mydata$day <- as.factor(mydata$day)
+```
+
+### 2. Make a panel plot containing two time series plots.
+Create *weekday_mean* to store the average number of steps taken, averaged across all weekday days.
+
+
+```r
+weekday_data <- subset(mydata, select = c(steps, date, inter), day == "weekday")
+weekday_mean <- aggregate(weekday_data$steps, by = list(weekday_data$inter), FUN = mean, na.rm = TRUE)
+weekday_mean[, 1] <- as.numeric(as.character(weekday_mean[, 1]))
+```
+
+Create *weekend_mean* to store the average number of steps taken, averaged across all weekend days.
+
+
+```r
+weekend_data <- subset(mydata, select = c(steps, date, inter), day == "weekend")
+weekend_mean <- aggregate(weekend_data$steps, by = list(weekend_data$inter), FUN = mean, na.rm = TRUE)
+weekend_mean[, 1] <- as.numeric(as.character(weekend_mean[, 1]))
+```
+
+Merge *weekday_mean* and *weekend_mean* to a new variable named *week_mean*, whose $day as a factor to distinguish weekdays and weekends.
+
+
+```r
+weekday_mean$day <- "weekday"
+weekend_mean$day <- "weekend"
+week_mean <- rbind(weekday_mean, weekend_mean)
+names(week_mean) <- c("interval", "steps", "day")
+week_mean$day <- as.factor(week_mean$day)
+```
+
+Plot figures to show the results of weekday data and weekend data.
+
+
+```r
+library(lattice)
+xyplot(steps ~ interval | day, data = week_mean, lyaout = c(1, 2), 
+       type = "l", xlab = "Intervals", ylab = "Average steps",
+       main = "Average steps across weekdays and weekends")
+```
+
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17-1.png) 
+
+I observe that there are different patterns between weekday data and weekend data. In weekday data, there is one very high peak at around 700 - 900 interval. While, though at this time, the weekend data also arrives at a peak, it is not very obvious. In weekend data, the data is not very stable, and there are several peaks which has similar values.
